@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AdiBot — Aditya College AI Assistant</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-content">
+      <div class="logo">
+        <span class="logo-icon">🎓</span>
+        <div>
+          <h1>AdiBot</h1>
+          <p>Aditya College of Engineering & Technology</p>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span>AI Online</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main>
+
+    <!-- Left Panel — Upload -->
+    <div class="left-panel">
+      <div class="upload-card">
+        <h2>📄 Upload College Document</h2>
+        <p>Upload PDFs like brochures, notices, syllabi, fee structure etc.</p>
+
+        <div class="upload-area" id="uploadArea">
+          <div class="upload-icon">📁</div>
+          <p>Drag & drop PDF here</p>
+          <p class="or">— or —</p>
+          <label for="fileInput" class="browse-btn">Browse File</label>
+          <input type="file" id="fileInput" accept=".pdf" hidden />
+        </div>
+
+        <div class="file-info" id="fileInfo" style="display:none">
+          <span id="fileName"></span>
+        </div>
+
+        <button class="upload-btn" id="uploadBtn" disabled>
+          Upload & Process
+        </button>
+
+        <div class="upload-status" id="uploadStatus"></div>
+      </div>
+
+      <!-- Suggested Questions -->
+      <div class="suggestions-card">
+        <h2>💡 Try Asking</h2>
+        <div class="suggestions">
+          <button class="suggestion-btn">What courses are offered?</button>
+          <button class="suggestion-btn">What is the fee structure?</button>
+          <button class="suggestion-btn">Tell me about admissions</button>
+          <button class="suggestion-btn">What are the hostel facilities?</button>
+          <button class="suggestion-btn">Who is the principal?</button>
+          <button class="suggestion-btn">What are placement details?</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel — Chat -->
+    <div class="right-panel">
+      <div class="chat-container">
+
+        <!-- Chat Header -->
+        <div class="chat-header">
+          <h2>💬 Chat with AdiBot</h2>
+          <button class="clear-btn" id="clearBtn">Clear Chat</button>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="chat-messages" id="chatMessages">
+          <div class="message bot-message">
+            <div class="message-avatar">🤖</div>
+            <div class="message-content">
+              <p>Hello! I'm <strong>AdiBot</strong>, your AI assistant for Aditya College of Engineering & Technology!</p>
+              <p>Please upload a college document first, then ask me anything about your college! 🎓</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="chat-input-area">
+          <input
+            type="text"
+            id="chatInput"
+            placeholder="Ask anything about Aditya College..."
+          />
+          <button id="sendBtn">
+            <span>Send</span>
+            <span>➤</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>
