@@ -1,5 +1,8 @@
 // Backend URL
-const API_URL = 'http://localhost:5000';
+const API_URL =
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : 'https://your-render-backend.onrender.com';
 
 // Elements
 const fileInput = document.getElementById('fileInput');
