@@ -6,7 +6,7 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const GEMINI_TIMEOUT_MS = 12000;
+const GEMINI_TIMEOUT_MS = 30000;
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
