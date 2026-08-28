@@ -6,6 +6,8 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+const GEMINI_TIMEOUT_MS = 12000;
+
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -108,7 +110,19 @@ Answer:`;
 
     console.log('Calling Gemini API...');
     const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
-    const result = await model.generateContent(prompt);
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const error = new Error('Gemini request timed out');
+        error.code = 'GEMINI_TIMEOUT';
+        reject(error);
+      }, GEMINI_TIMEOUT_MS);
+    });
+    const result = await Promise.race([
+      model.generateContent(prompt),
+      timeout,
+    ]);
+    clearTimeout(timeoutId);
     const response = await result.response;
     const answer = response.text();
     console.log('Answer received:', answer.substring(0, 100));

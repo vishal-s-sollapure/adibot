@@ -70,6 +70,16 @@ app.post('/chat', async (req, res) => {
         error: 'Gemini authentication failed. Use a Gemini API key from Google AI Studio in backend/.env, then restart the backend.'
       });
     }
+    if (error?.code === 'GEMINI_TIMEOUT') {
+      return res.status(504).json({
+        error: 'The AI service took too long to respond. Please try again.'
+      });
+    }
+    if (error?.status >= 500 || error?.status === 429) {
+      return res.status(503).json({
+        error: 'The AI service is temporarily busy. Please try again in a moment.'
+      });
+    }
     res.status(500).json({ error: 'Failed to get answer' });
   }
 });

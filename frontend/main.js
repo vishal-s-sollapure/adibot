@@ -12,6 +12,7 @@ const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 const uploadArea = document.getElementById('uploadArea');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+const CHAT_TIMEOUT_MS = 15000;
 
 // File Selection
 fileInput.addEventListener('change', (e) => {
@@ -159,11 +160,15 @@ async function sendMessage() {
   addTypingIndicator();
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
     const response = await fetch(`${API_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question })
+      body: JSON.stringify({ question }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     const data = await response.json();
     removeTypingIndicator();
@@ -175,7 +180,11 @@ async function sendMessage() {
     }
   } catch (error) {
     removeTypingIndicator();
-    addBotMessage('❌ Cannot connect to server. Make sure backend is running!');
+    if (error.name === 'AbortError') {
+      addBotMessage('The AI service is taking too long to respond. Please try again.');
+    } else {
+      addBotMessage('Cannot connect to the AI service. Please try again in a moment.');
+    }
   }
 
   sendBtn.disabled = false;
