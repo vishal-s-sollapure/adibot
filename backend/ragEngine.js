@@ -71,8 +71,9 @@ function getFallbackAnswer(question, context) {
   );
 
   if (requestedSection) {
+    const sectionLabels = sectionKeywords.map(section => section.label).join('|');
     const sectionPattern = new RegExp(
-      `${requestedSection.label}\\s*:?\\s*(.*?)(?=\\s+(?:location|established|courses offered|fee structure|facilities|placements|admission)\\s*:|$)`,
+      `\\b${requestedSection.label.replace(' ', '\\s+')}\\s*:\\s*([\\s\\S]*?)(?=\\s+(?:${sectionLabels})\\s*:|$)`,
       'i'
     );
     const section = context.match(sectionPattern)?.[1]?.trim();
