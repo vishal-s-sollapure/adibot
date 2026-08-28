@@ -7,6 +7,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const GEMINI_TIMEOUT_MS = 30000;
+const GEMINI_RETRY_DELAYS_MS = [1000, 2500];
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -110,19 +111,34 @@ Answer:`;
 
     console.log('Calling Gemini API...');
     const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
-    let timeoutId;
-    const timeout = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        const error = new Error('Gemini request timed out');
-        error.code = 'GEMINI_TIMEOUT';
-        reject(error);
-      }, GEMINI_TIMEOUT_MS);
-    });
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      timeout,
-    ]);
-    clearTimeout(timeoutId);
+    let result;
+    for (let attempt = 0; attempt <= GEMINI_RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        let timeoutId;
+        const timeout = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => {
+            const error = new Error('Gemini request timed out');
+            error.code = 'GEMINI_TIMEOUT';
+            reject(error);
+          }, GEMINI_TIMEOUT_MS);
+        });
+        result = await Promise.race([
+          model.generateContent(prompt),
+          timeout,
+        ]);
+        clearTimeout(timeoutId);
+        break;
+      } catch (error) {
+        const isTransient = error?.status === 429 || error?.status >= 500;
+        const retryDelay = GEMINI_RETRY_DELAYS_MS[attempt];
+        if (!isTransient || retryDelay === undefined) {
+          throw error;
+        }
+        console.warn(`Gemini temporarily unavailable. Retrying in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+
     const response = await result.response;
     const answer = response.text();
     console.log('Answer received:', answer.substring(0, 100));
