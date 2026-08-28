@@ -57,6 +57,33 @@ function findRelevantChunks(question, chunks, topK = 3) {
     .map(c => c.text);
 }
 
+function getFallbackAnswer(question, context) {
+  const normalizedQuestion = question.toLowerCase();
+  const sectionKeywords = [
+    { label: 'fee structure', keywords: ['fee', 'fees', 'tuition', 'cost', 'price'] },
+    { label: 'courses offered', keywords: ['course', 'courses', 'branch', 'branches', 'program'] },
+    { label: 'facilities', keywords: ['facility', 'facilities', 'hostel', 'library', 'sports', 'wifi'] },
+    { label: 'admission', keywords: ['admission', 'admissions', 'eligibility', 'cet', 'comedk'] },
+    { label: 'placements', keywords: ['placement', 'placements', 'package', 'recruiter', 'job'] },
+  ];
+  const requestedSection = sectionKeywords.find(section =>
+    section.keywords.some(keyword => normalizedQuestion.includes(keyword))
+  );
+
+  if (requestedSection) {
+    const sectionPattern = new RegExp(
+      `${requestedSection.label}\\s*:?\\s*(.*?)(?=\\s+(?:location|established|courses offered|fee structure|facilities|placements|admission)\\s*:|$)`,
+      'i'
+    );
+    const section = context.match(sectionPattern)?.[1]?.trim();
+    if (section) {
+      return `According to your college document, the ${requestedSection.label} information is: ${section}`;
+    }
+  }
+
+  return `According to your college document: ${context}`;
+}
+
 // Process uploaded PDF
 async function processDocument(filePath) {
   try {
@@ -101,6 +128,7 @@ async function askQuestion(question) {
 
 Use the following information from college documents to answer the student's question.
 If the answer is not in the provided information, say "I don't have that information in my knowledge base. Please contact the college administration."
+Answer only what the student asked for. Keep the answer concise and do not list unrelated information.
 
 College Document Information:
 ${context}
@@ -132,14 +160,14 @@ Answer:`;
         clearTimeout(timeoutId);
         if (error?.code === 'GEMINI_TIMEOUT') {
           console.warn('Gemini timed out. Returning document context instead.');
-          return `I found this relevant information in your college document:\n\n${context}`;
+          return getFallbackAnswer(question, context);
         }
         const isTransient = error?.status === 429 || error?.status >= 500;
         const retryDelay = GEMINI_RETRY_DELAYS_MS[attempt];
         if (!isTransient || retryDelay === undefined) {
           if (isTransient) {
             console.warn('Gemini remained unavailable. Returning document context instead.');
-            return `I found this relevant information in your college document:\n\n${context}`;
+            return getFallbackAnswer(question, context);
           }
           throw error;
         }
