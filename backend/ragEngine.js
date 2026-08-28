@@ -113,8 +113,8 @@ Answer:`;
     const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
     let result;
     for (let attempt = 0; attempt <= GEMINI_RETRY_DELAYS_MS.length; attempt++) {
+      let timeoutId;
       try {
-        let timeoutId;
         const timeout = new Promise((_, reject) => {
           timeoutId = setTimeout(() => {
             const error = new Error('Gemini request timed out');
@@ -129,9 +129,18 @@ Answer:`;
         clearTimeout(timeoutId);
         break;
       } catch (error) {
+        clearTimeout(timeoutId);
+        if (error?.code === 'GEMINI_TIMEOUT') {
+          console.warn('Gemini timed out. Returning document context instead.');
+          return `I found this relevant information in your college document:\n\n${context}`;
+        }
         const isTransient = error?.status === 429 || error?.status >= 500;
         const retryDelay = GEMINI_RETRY_DELAYS_MS[attempt];
         if (!isTransient || retryDelay === undefined) {
+          if (isTransient) {
+            console.warn('Gemini remained unavailable. Returning document context instead.');
+            return `I found this relevant information in your college document:\n\n${context}`;
+          }
           throw error;
         }
         console.warn(`Gemini temporarily unavailable. Retrying in ${retryDelay}ms...`);

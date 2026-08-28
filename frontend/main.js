@@ -12,7 +12,7 @@ const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 const uploadArea = document.getElementById('uploadArea');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
-const CHAT_TIMEOUT_MS = 35000;
+const CHAT_TIMEOUT_MS = 40000;
 
 // File Selection
 fileInput.addEventListener('change', (e) => {
