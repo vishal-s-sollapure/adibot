@@ -1,9 +1,5 @@
 // Backend URL
-const API_URL =
-  window.location.hostname === 'localhost'
-    ? 'http://localhost:5000'
-    : 'https://your-render-backend.onrender.com';
-
+const API_URL = 'https://adibot-3w4u.onrender.com';
 // Elements
 const fileInput = document.getElementById('fileInput');
 const uploadBtn = document.getElementById('uploadBtn');
