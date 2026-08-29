@@ -58,8 +58,8 @@ app.post('/chat', async (req, res) => {
     if (!question) {
       return res.status(400).json({ error: 'Question is required' });
     }
-    const answer = await askQuestion(question);
-    res.json({ answer });
+    const result = await askQuestion(question);
+    res.json(result);
   } catch (error) {
     console.error(error);
     if (

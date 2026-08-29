@@ -18,7 +18,7 @@
           <p>Aditya College of Engineering & Technology</p>
         </div>
       </div>
-      <div class="status" id="status">
+      <div class="status">
         <span class="status-dot"></span>
         <span>AI Online</span>
       </div>
@@ -26,85 +26,89 @@
   </header>
 
   <!-- Main Container -->
-  <main>
+  <div id="uploadToast" class="upload-toast"></div>
 
-    <!-- Left Panel — Upload -->
+  <div class="main-container">
+
+    <!-- Left Panel -->
     <div class="left-panel">
-      <div class="upload-card">
-        <h2>📄 Upload College Document</h2>
-        <p>Upload PDFs like brochures, notices, syllabi, fee structure etc.</p>
 
+      <!-- Upload Card -->
+      <div class="card">
+        <h2>📄 Upload Document</h2>
+        <p class="subtitle">Upload college PDFs to train AdiBot</p>
         <div class="upload-area" id="uploadArea">
           <div class="upload-icon">📁</div>
           <p>Drag & drop PDF here</p>
           <p class="or">— or —</p>
-          <label for="fileInput" class="browse-btn">Browse File</label>
-          <input type="file" id="fileInput" accept=".pdf" hidden />
+          <button class="browse-btn" id="browseBtn">Browse File</button>
+          <input type="file" id="fileInput" accept=".pdf" />
         </div>
-
-        <div class="file-info" id="fileInfo" style="display:none">
-          <span id="fileName"></span>
-        </div>
-
+        <div class="file-info" id="fileInfo"></div>
         <button class="upload-btn" id="uploadBtn" disabled>
-          Upload & Process
+          ⬆️ Upload & Process
         </button>
-
         <div class="upload-status" id="uploadStatus"></div>
       </div>
 
-      <!-- Suggested Questions -->
-      <div class="suggestions-card">
+      <!-- History Card -->
+      <div class="card">
+        <h2>🕐 Recent Questions</h2>
+        <div id="historyContainer">
+          <p class="no-history">No history yet</p>
+        </div>
+      </div>
+
+      <!-- Suggestions Card -->
+      <div class="card">
         <h2>💡 Try Asking</h2>
         <div class="suggestions">
           <button class="suggestion-btn">What courses are offered?</button>
           <button class="suggestion-btn">What is the fee structure?</button>
           <button class="suggestion-btn">Tell me about admissions</button>
-          <button class="suggestion-btn">What are the hostel facilities?</button>
+          <button class="suggestion-btn">What are hostel facilities?</button>
           <button class="suggestion-btn">Who is the principal?</button>
           <button class="suggestion-btn">What are placement details?</button>
         </div>
       </div>
+
     </div>
 
-    <!-- Right Panel — Chat -->
+    <!-- Right Panel -->
     <div class="right-panel">
-      <div class="chat-container">
+      <div class="chat-box">
 
         <!-- Chat Header -->
         <div class="chat-header">
           <h2>💬 Chat with AdiBot</h2>
-          <button class="clear-btn" id="clearBtn">Clear Chat</button>
+          <button id="clearBtn">Clear Chat</button>
         </div>
 
-        <!-- Chat Messages -->
-        <div class="chat-messages" id="chatMessages">
-          <div class="message bot-message">
-            <div class="message-avatar">🤖</div>
-            <div class="message-content">
-              <p>Hello! I'm <strong>AdiBot</strong>, your AI assistant for Aditya College of Engineering & Technology!</p>
-              <p>Please upload a college document first, then ask me anything about your college! 🎓</p>
+        <!-- Messages -->
+        <div class="messages" id="chatMessages">
+          <div class="message bot">
+            <div class="avatar">🤖</div>
+            <div class="bubble">
+              <p>Hello! I'm <strong>AdiBot</strong>, your AI assistant for Aditya College!</p>
+              <p>Upload a college document first, then ask me anything! 🎓</p>
             </div>
           </div>
         </div>
 
-        <!-- Chat Input -->
-        <div class="chat-input-area">
+        <!-- Input -->
+        <div class="input-area">
           <input
             type="text"
             id="chatInput"
             placeholder="Ask anything about Aditya College..."
           />
-          <button id="sendBtn">
-            <span>Send</span>
-            <span>➤</span>
-          </button>
+          <button id="sendBtn">Send ➤</button>
         </div>
 
       </div>
     </div>
 
-  </main>
+  </div>
 
   <script src="main.js"></script>
 </body>

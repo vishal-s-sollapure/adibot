@@ -8,7 +8,7 @@ dotenv.config();
 
 const GEMINI_TIMEOUT_MS = 20000;
 const GEMINI_RETRY_DELAYS_MS = [1000, 2000];
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -56,6 +56,19 @@ function findRelevantChunks(question, chunks, topK = 3) {
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .map(c => c.text);
+}
+
+function buildAnswerResponse(answer, relevantChunks = []) {
+  return {
+    answer: String(answer || '').trim() || 'I could not find an answer in the uploaded document.',
+    sources: relevantChunks.map((chunk, index) => ({
+      id: index + 1,
+      text: chunk.substring(0, 100) + '...',
+      score: Math.round((relevantChunks.length - index) / relevantChunks.length * 100)
+    })),
+    confidence: relevantChunks.length > 0 ?
+      Math.round((relevantChunks.length / 3) * 100) : 0
+  };
 }
 
 function getFallbackAnswer(question, context) {
@@ -119,7 +132,7 @@ async function askQuestion(question) {
     console.log('Total chunks:', documentChunks.length);
 
     if (documentChunks.length === 0) {
-      return 'Please upload a college document first so I can answer your questions!';
+      return buildAnswerResponse('Please upload a college document first so I can answer your questions!');
     }
 
     const relevantChunks = findRelevantChunks(question, documentChunks);
@@ -162,14 +175,14 @@ Answer:`;
         clearTimeout(timeoutId);
         if (error?.code === 'GEMINI_TIMEOUT') {
           console.warn('Gemini timed out. Returning document context instead.');
-          return getFallbackAnswer(question, context);
+          return buildAnswerResponse(getFallbackAnswer(question, context), relevantChunks);
         }
         const isTransient = error?.status === 429 || error?.status >= 500;
         const retryDelay = GEMINI_RETRY_DELAYS_MS[attempt];
         if (!isTransient || retryDelay === undefined) {
           if (isTransient) {
             console.warn('Gemini remained unavailable. Returning document context instead.');
-            return getFallbackAnswer(question, context);
+            return buildAnswerResponse(getFallbackAnswer(question, context), relevantChunks);
           }
           throw error;
         }
@@ -179,10 +192,10 @@ Answer:`;
     }
 
     const response = await result.response;
-    const answer = response.text();
+    const answer = await response.text();
     console.log('Answer received:', answer.substring(0, 100));
 
-    return answer;
+    return buildAnswerResponse(answer, relevantChunks);
   } catch (error) {
     console.error('Full error:', error);
     throw error;

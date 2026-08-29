@@ -53,6 +53,8 @@ AI-powered answers from official college documents.
 ## Backend
 🔧 API: https://adibot-3w4u.onrender.com
 
+Frontend is configured to use the Render backend in production, while keeping localhost for local development.
+
 ## Setup Instructions
 ### Prerequisites
 - Node.js installed
