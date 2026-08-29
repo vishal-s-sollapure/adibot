@@ -6,8 +6,9 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const GEMINI_TIMEOUT_MS = 30000;
-const GEMINI_RETRY_DELAYS_MS = [1000, 2500];
+const GEMINI_TIMEOUT_MS = 20000;
+const GEMINI_RETRY_DELAYS_MS = [1000, 2000];
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -139,7 +140,7 @@ Student Question: ${question}
 Answer:`;
 
     console.log('Calling Gemini API...');
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     let result;
     for (let attempt = 0; attempt <= GEMINI_RETRY_DELAYS_MS.length; attempt++) {
       let timeoutId;

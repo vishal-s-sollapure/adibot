@@ -12,7 +12,7 @@ const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 const uploadArea = document.getElementById('uploadArea');
 const suggestionBtns = document.querySelectorAll('.suggestion-btn');
-const CHAT_TIMEOUT_MS = 40000;
+const CHAT_TIMEOUT_MS = 20000;
 
 // File Selection
 fileInput.addEventListener('change', (e) => {
@@ -63,11 +63,12 @@ uploadBtn.addEventListener('click', async () => {
   formData.append('pdf', file);
 
   try {
-    const response = await fetch(`${API_URL}/upload`, {
-      method: 'POST',
-      body: formData
-    });
-
+    const response = await fetch(`${API_URL}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+    signal: AbortSignal.timeout(60000)
+  });
     const data = await response.json();
 
     if (response.ok) {

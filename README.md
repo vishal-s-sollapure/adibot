@@ -61,3 +61,4 @@ AI-powered answers from official college documents.
 ```bash
 cd backend
 npm install
+```
