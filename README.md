@@ -44,7 +44,8 @@ AI-powered answers from official college documents.
 - Context retrieval and prompt engineering
 
 ## Screenshots
-(Add screenshots here)
+<img width="1913" height="1017" alt="image" src="https://github.com/user-attachments/assets/7937cebd-3b7f-4ff4-8586-e343903df185" />
+
 
 ## Live Demo
 🌐 Frontend: https://adibot-three.vercel.app
