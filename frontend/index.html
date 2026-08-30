@@ -7,8 +7,32 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<!-- Authentication Header -->
+<header style="display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background-color: #0f172a; color: white; border-bottom: 1px solid #1e293b;">
+  <div style="font-weight: bold; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+    🎓 <span>AdiBot</span>
+  </div>
+  <div id="auth-container">
+    <button id="signin-btn" style="background-color: #2563eb; color: white; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Sign In</button>
+  </div>
+</header>
 
-  <!-- Header -->
+<!-- Authentication Modal Popup -->
+<div id="auth-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(4px);">
+  <div style="background: #0f172a; border: 1px solid #1e293b; padding: 24px; border-radius: 12px; width: 320px; color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+    <h3 id="modal-title" style="margin-top: 0; font-size: 1.25rem;">Sign In</h3>
+    <form id="auth-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+      <input type="email" id="auth-email" placeholder="student@aditya.ac.in" required style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;" />
+      <input type="password" id="auth-pass" placeholder="••••••••" required style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;" />
+      <button type="submit" style="background: #2563eb; color: white; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 6px;">Submit</button>
+    </form>
+    <div style="display: flex; justify-content: space-between; margin-top: 16px; font-size: 0.8rem;">
+      <span id="toggle-auth" style="color: #60a5fa; cursor: pointer;">Need an account? Sign Up</span>
+      <span id="close-modal" style="color: #94a3b8; cursor: pointer;">Close</span>
+    </div>
+  </div>
+</div>
+ <!-- Header -->
   <header>
     <div class="header-content">
       <div class="logo">
