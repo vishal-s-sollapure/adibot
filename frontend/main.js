@@ -279,3 +279,57 @@ document.querySelectorAll('.suggestion-btn').forEach(btn => {
 
 // Initialize
 updateHistory();
+// --- User Authentication Management ---
+const authContainer = document.getElementById('auth-container');
+const authModal = document.getElementById('auth-modal');
+const closeModal = document.getElementById('close-modal');
+const authForm = document.getElementById('auth-form');
+const authEmail = document.getElementById('auth-email');
+const toggleAuth = document.getElementById('toggle-auth');
+const modalTitle = document.getElementById('modal-title');
+
+let isSignUpState = false;
+
+function updateAuthUI() {
+  const user = JSON.parse(localStorage.getItem('adibot_user'));
+  if (user && authContainer) {
+    authContainer.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 0.85rem; color: #4ade80; background: rgba(74, 222, 128, 0.1); padding: 4px 10px; border-radius: 20px; border: 1px solid #166534;">👤 ${user.email}</span>
+        <button id="logout-btn" style="background: #e11d48; color: white; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;">Logout</button>
+      </div>
+    `;
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem('adibot_user');
+      updateAuthUI();
+    });
+  } else if (authContainer) {
+    authContainer.innerHTML = `<button id="signin-btn" style="background-color: #2563eb; color: white; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Sign In</button>`;
+    document.getElementById('signin-btn').addEventListener('click', () => authModal.style.display = 'flex');
+  }
+}
+
+if (closeModal) {
+  closeModal.addEventListener('click', () => authModal.style.display = 'none');
+}
+
+if (toggleAuth) {
+  toggleAuth.addEventListener('click', () => {
+    isSignUpState = !isSignUpState;
+    modalTitle.innerText = isSignUpState ? 'Create Account' : 'Sign In';
+    toggleAuth.innerText = isSignUpState ? 'Already have an account? Sign In' : 'Need an account? Sign Up';
+  });
+}
+
+if (authForm) {
+  authForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!authEmail.value) return;
+    localStorage.setItem('adibot_user', JSON.stringify({ email: authEmail.value }));
+    authModal.style.display = 'none';
+    updateAuthUI();
+  });
+}
+
+// Initial UI check on page load
+updateAuthUI();
