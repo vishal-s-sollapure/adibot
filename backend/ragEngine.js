@@ -58,19 +58,6 @@ function findRelevantChunks(question, chunks, topK = 3) {
     .map(c => c.text);
 }
 
-function buildAnswerResponse(answer, relevantChunks = []) {
-  return {
-    answer: String(answer || '').trim() || 'I could not find an answer in the uploaded document.',
-    sources: relevantChunks.map((chunk, index) => ({
-      id: index + 1,
-      text: chunk.substring(0, 100) + '...',
-      score: Math.round((relevantChunks.length - index) / relevantChunks.length * 100)
-    })),
-    confidence: relevantChunks.length > 0 ?
-      Math.round((relevantChunks.length / 3) * 100) : 0
-  };
-}
-
 function getFallbackAnswer(question, context) {
   const normalizedQuestion = question.toLowerCase();
   const sectionKeywords = [
@@ -132,7 +119,7 @@ async function askQuestion(question) {
     console.log('Total chunks:', documentChunks.length);
 
     if (documentChunks.length === 0) {
-      return buildAnswerResponse('Please upload a college document first so I can answer your questions!');
+      return 'Please upload a college document first so I can answer your questions!';
     }
 
     const relevantChunks = findRelevantChunks(question, documentChunks);
@@ -175,14 +162,14 @@ Answer:`;
         clearTimeout(timeoutId);
         if (error?.code === 'GEMINI_TIMEOUT') {
           console.warn('Gemini timed out. Returning document context instead.');
-          return buildAnswerResponse(getFallbackAnswer(question, context), relevantChunks);
+          return getFallbackAnswer(question, context);
         }
         const isTransient = error?.status === 429 || error?.status >= 500;
         const retryDelay = GEMINI_RETRY_DELAYS_MS[attempt];
         if (!isTransient || retryDelay === undefined) {
           if (isTransient) {
             console.warn('Gemini remained unavailable. Returning document context instead.');
-            return buildAnswerResponse(getFallbackAnswer(question, context), relevantChunks);
+            return getFallbackAnswer(question, context);
           }
           throw error;
         }
@@ -192,14 +179,57 @@ Answer:`;
     }
 
     const response = await result.response;
-    const answer = await response.text();
+    const answer = response.text();
     console.log('Answer received:', answer.substring(0, 100));
 
-    return buildAnswerResponse(answer, relevantChunks);
+    return {
+      answer,
+      sources: relevantChunks.map((chunk, index) => ({
+        id: index + 1,
+        text: chunk.substring(0, 100) + '...',
+        score: Math.round((relevantChunks.length - index) / relevantChunks.length * 100)
+      })),
+      confidence: relevantChunks.length > 0 ? 
+        Math.round((relevantChunks.length / 3) * 100) : 0
+    };
   } catch (error) {
     console.error('Full error:', error);
     throw error;
   }
 }
 
-module.exports = { processDocument, askQuestion };
+module.exports = { processDocument, askQuestion, summarizeDocument };
+// Summarize Document
+async function summarizeDocument() {
+  try {
+    if (documentChunks.length === 0) {
+      return 'No document uploaded yet!';
+    }
+
+    // Get first 5 chunks for summary
+    const sampleText = documentChunks
+      .slice(0, 5)
+      .map(c => c.text)
+      .join('\n\n');
+
+    const prompt = `You are AdiBot, an AI assistant for Aditya College of Engineering and Technology.
+
+Analyze this college document and provide a clear, structured summary including:
+1. Main topics covered
+2. Key information found
+3. What students can ask about
+
+Document Content:
+${sampleText}
+
+Provide a helpful summary in 150 words or less:`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error('Summary error:', error);
+    throw error;
+  }
+}

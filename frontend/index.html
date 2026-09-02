@@ -42,16 +42,28 @@
           <p>Aditya College of Engineering & Technology</p>
         </div>
       </div>
-      <div class="status">
-        <span class="status-dot"></span>
-        <span>AI Online</span>
+
+      <div class="header-right">
+        <div class="status">
+          <span class="status-dot"></span>
+          <span>AI Online</span>
+        </div>
+
+        <div class="header-actions" id="guestActions">
+          <button class="auth-btn login-btn" type="button" data-mode="login">Login</button>
+          <button class="auth-btn signin-btn" type="button" data-mode="login">Sign in</button>
+          <button class="auth-btn signup-btn" type="button" data-mode="signup">Sign up</button>
+        </div>
+
+        <div class="user-badge hidden" id="userBadge">
+          <span id="userNameText">User</span>
+          <button id="logoutBtn" type="button">Logout</button>
+        </div>
       </div>
     </div>
   </header>
 
   <!-- Main Container -->
-  <div id="uploadToast" class="upload-toast"></div>
-
   <div class="main-container">
 
     <!-- Left Panel -->
@@ -65,8 +77,8 @@
           <div class="upload-icon">📁</div>
           <p>Drag & drop PDF here</p>
           <p class="or">— or —</p>
-          <button class="browse-btn" id="browseBtn">Browse File</button>
-          <input type="file" id="fileInput" accept=".pdf" />
+          <button class="browse-btn" id="browseBtn" type="button">Browse File</button>
+<input type="file" id="fileInput" accept=".pdf" style="display:none" />
         </div>
         <div class="file-info" id="fileInfo"></div>
         <button class="upload-btn" id="uploadBtn" disabled>
@@ -105,20 +117,22 @@
         <!-- Chat Header -->
         <div class="chat-header">
           <h2>💬 Chat with AdiBot</h2>
-          <button id="clearBtn">Clear Chat</button>
+          <div style="display:flex;gap:8px;">
+            <button id="exportBtn" onclick="exportChat()">📥 Export</button>
+            <button id="clearBtn">Clear Chat</button>
+          </div>
         </div>
 
         <!-- Messages -->
         <div class="messages" id="chatMessages">
           <div class="message bot">
             <div class="avatar">🤖</div>
-            <div class="bubble">
-              <p>Hello! I'm <strong>AdiBot</strong>, your AI assistant for Aditya College!</p>
-              <p>Upload a college document first, then ask me anything! 🎓</p>
+             <div class="bubble">
+              <p>Hello! I'm <strong>AdiBot</strong>, your AI assistant for Aditya College of Engineering & Technology!</p>
+              <p>Please upload a college document first, then ask me anything! 🎓</p>
             </div>
           </div>
         </div>
-
         <!-- Input -->
         <div class="input-area">
           <input
@@ -132,6 +146,37 @@
       </div>
     </div>
 
+  </div>
+
+  <div class="auth-modal hidden" id="authModal" aria-hidden="true">
+    <div class="auth-panel">
+      <button class="close-auth" id="closeAuthModal" type="button" aria-label="Close">×</button>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" type="button" data-mode="login">Login</button>
+        <button class="auth-tab" type="button" data-mode="signup">Sign up</button>
+      </div>
+
+      <form id="authForm" class="auth-form">
+        <div class="field hidden" id="nameField">
+          <label for="authName">Full name</label>
+          <input id="authName" type="text" placeholder="Your full name" />
+        </div>
+
+        <div class="field">
+          <label for="authEmail">Email</label>
+          <input id="authEmail" type="email" placeholder="you@example.com" required />
+        </div>
+
+        <div class="field">
+          <label for="authPassword">Password</label>
+          <input id="authPassword" type="password" placeholder="Minimum 6 characters" required />
+        </div>
+
+        <button type="submit" id="authSubmitBtn" class="primary-btn">Login</button>
+        <p id="authMessage" class="auth-message"></p>
+      </form>
+    </div>
   </div>
 
   <script src="main.js"></script>

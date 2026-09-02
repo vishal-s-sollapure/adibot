@@ -1,9 +1,8 @@
-const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:5000'
-  : 'https://adibot-3w4u.onrender.com';
+const API_URL = 'http://localhost:5000';
 
 // Chat History
 let chatHistory = JSON.parse(localStorage.getItem('adibotHistory') || '[]');
+let currentUser = null;
 
 // Elements
 const fileInput = document.getElementById('fileInput');
@@ -16,9 +15,177 @@ const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 const uploadArea = document.getElementById('uploadArea');
+const guestActions = document.getElementById('guestActions');
+const userBadge = document.getElementById('userBadge');
+const userNameText = document.getElementById('userNameText');
+const logoutBtn = document.getElementById('logoutBtn');
+const authModal = document.getElementById('authModal');
+const authForm = document.getElementById('authForm');
+const authName = document.getElementById('authName');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const authMessage = document.getElementById('authMessage');
+const nameField = document.getElementById('nameField');
+const closeAuthModal = document.getElementById('closeAuthModal');
+
+let authMode = 'login';
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('adibotAuthToken');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function updateAuthUI() {
+  const hasUser = !!currentUser;
+  guestActions.classList.toggle('hidden', hasUser);
+  userBadge.classList.toggle('hidden', !hasUser);
+
+  if (hasUser) {
+    userNameText.textContent = currentUser.name || 'User';
+    uploadBtn.disabled = !fileInput.files[0];
+    sendBtn.disabled = false;
+  } else {
+    uploadBtn.disabled = true;
+    sendBtn.disabled = true;
+  }
+}
+
+async function restoreSession() {
+  const token = localStorage.getItem('adibotAuthToken');
+  if (!token) {
+    currentUser = null;
+    updateAuthUI();
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/me`, {
+      headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('session invalid');
+    }
+
+    const data = await response.json();
+    currentUser = data.user;
+    updateAuthUI();
+  } catch (error) {
+    localStorage.removeItem('adibotAuthToken');
+    localStorage.removeItem('adibotUser');
+    currentUser = null;
+    updateAuthUI();
+  }
+}
+
+function openAuthModal(mode) {
+  authMode = mode;
+  const isSignup = mode === 'signup';
+  nameField.classList.toggle('hidden', !isSignup);
+  authSubmitBtn.textContent = isSignup ? 'Create account' : 'Login';
+  authMessage.textContent = '';
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.mode === mode);
+  });
+  authModal.classList.remove('hidden');
+  authModal.setAttribute('aria-hidden', 'false');
+  if (isSignup) {
+    authName.focus();
+  } else {
+    authEmail.focus();
+  }
+}
+
+function closeAuthModalUI() {
+  authModal.classList.add('hidden');
+  authModal.setAttribute('aria-hidden', 'true');
+  authForm.reset();
+  authMessage.textContent = '';
+}
+
+async function submitAuthForm(event) {
+  event.preventDefault();
+  const payload = {
+    email: authEmail.value.trim(),
+    password: authPassword.value.trim()
+  };
+
+  if (authMode === 'signup') {
+    payload.name = authName.value.trim();
+  }
+
+  if (!payload.email || !payload.password || (authMode === 'signup' && !payload.name)) {
+    authMessage.textContent = 'Please fill in all required fields.';
+    authMessage.className = 'auth-message error';
+    return;
+  }
+
+  authSubmitBtn.disabled = true;
+  authMessage.textContent = authMode === 'signup' ? 'Creating account...' : 'Signing in...';
+  authMessage.className = 'auth-message';
+
+  try {
+    const response = await fetch(`${API_URL}/${authMode}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Authentication failed');
+    }
+
+    currentUser = data.user;
+    localStorage.setItem('adibotAuthToken', data.token);
+    localStorage.setItem('adibotUser', JSON.stringify(data.user));
+    updateAuthUI();
+    closeAuthModalUI();
+    addSuccessMessage(`✅ Welcome, ${currentUser.name}!`);
+  } catch (error) {
+    authMessage.textContent = error.message;
+    authMessage.className = 'auth-message error';
+  } finally {
+    authSubmitBtn.disabled = false;
+  }
+}
+
+function logoutUser() {
+  currentUser = null;
+  localStorage.removeItem('adibotAuthToken');
+  localStorage.removeItem('adibotUser');
+  updateAuthUI();
+  addSuccessMessage('✅ Logged out successfully.');
+}
+
+const authButtons = document.querySelectorAll('.auth-btn');
+authButtons.forEach(button => {
+  button.addEventListener('click', () => openAuthModal(button.dataset.mode));
+});
+
+document.querySelectorAll('.auth-tab').forEach(tab => {
+  tab.addEventListener('click', () => openAuthModal(tab.dataset.mode));
+});
+
+closeAuthModal.addEventListener('click', closeAuthModalUI);
+authModal.addEventListener('click', (event) => {
+  if (event.target === authModal) closeAuthModalUI();
+});
+authForm.addEventListener('submit', submitAuthForm);
+logoutBtn.addEventListener('click', logoutUser);
 
 // Browse Button Click
-browseBtn.addEventListener('click', () => fileInput.click());
+browseBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!currentUser) {
+    addBotMessage('Please log in to upload a PDF and use AdiBot.');
+    openAuthModal('login');
+    return;
+  }
+  fileInput.click();
+});
 
 // File Selected
 fileInput.addEventListener('change', (e) => {
@@ -43,6 +210,11 @@ uploadArea.addEventListener('dragleave', () => {
 uploadArea.addEventListener('drop', (e) => {
   e.preventDefault();
   uploadArea.style.borderColor = '#cbd5e0';
+  if (!currentUser) {
+    addBotMessage('Please log in to upload a PDF and use AdiBot.');
+    openAuthModal('login');
+    return;
+  }
   const file = e.dataTransfer.files[0];
   if (file && file.type === 'application/pdf') {
     fileInput.files = e.dataTransfer.files;
@@ -54,6 +226,12 @@ uploadArea.addEventListener('drop', (e) => {
 
 // Upload PDF
 uploadBtn.addEventListener('click', async () => {
+  if (!currentUser) {
+    openAuthModal('login');
+    showStatus('❌ Please log in first.', 'error');
+    return;
+  }
+
   const file = fileInput.files[0];
   if (!file) return;
 
@@ -66,47 +244,57 @@ uploadBtn.addEventListener('click', async () => {
   try {
     const response = await fetch(`${API_URL}/upload`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      headers: getAuthHeaders()
     });
     const data = await response.json();
+
     if (response.ok) {
-      showStatus('✅ Uploaded successfully!', 'success');
-      fileInfo.textContent = '📄 ' + file.name + ' • uploaded successfully';
-      showToast('✅ PDF uploaded successfully!');
-      addBotMessage('File uploaded successfully! You can now ask anything about Aditya College... 🎓', [], 0);
+      addSuccessMessage('✅ Document uploaded successfully! Generating summary... ⏳');
+      showStatus('✅ PDF processed successfully!', 'success');
+      try {
+        const summaryRes = await fetch(`${API_URL}/summarize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }
+        });
+        const summaryData = await summaryRes.json();
+
+        if (summaryData && summaryData.summary) {
+          addBotMessage(`📋 Document Summary:\n\n${summaryData.summary}\n\nYou can now ask me anything! 🎓`, [], 0);
+        } else {
+          addBotMessage('Document ready! Ask me anything about Aditya College! 🎓', [], 0);
+        }
+      } catch (err) {
+        addBotMessage('Document ready! Ask me anything about Aditya College! 🎓', [], 0);
+      }
       uploadBtn.disabled = false;
     } else {
-      showStatus('❌ ' + data.error, 'error');
-      showToast('❌ Upload failed: ' + data.error, true);
+      showStatus('❌ ' + (data.error || 'Upload failed'), 'error');
       uploadBtn.disabled = false;
     }
   } catch (error) {
     showStatus('❌ Server not running!', 'error');
-    showToast('❌ Server not running!', true);
     uploadBtn.disabled = false;
   }
 });
 
+// Show Status
 function showStatus(msg, type) {
   uploadStatus.textContent = msg;
   uploadStatus.className = 'upload-status ' + type;
 }
 
-function showToast(message, isError = false) {
-  const toast = document.getElementById('uploadToast');
-  if (!toast) return;
-
-  toast.textContent = message;
-  toast.classList.remove('show', 'error');
-  if (isError) {
-    toast.classList.add('error');
-  }
-  toast.classList.add('show');
-
-  clearTimeout(toast.hideTimer);
-  toast.hideTimer = setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2500);
+// Add Success Message (Green)
+function addSuccessMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'message bot';
+  div.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble success-bubble">
+      <p>${text}</p>
+    </div>`;
+  chatMessages.appendChild(div);
+  scrollBottom();
 }
 
 // Add Bot Message
@@ -114,7 +302,8 @@ function addBotMessage(text, sources = [], confidence = 0) {
   const div = document.createElement('div');
   div.className = 'message bot';
 
-  const confColor = confidence > 70 ? '#48bb78' : confidence > 40 ? '#ed8936' : '#e94560';
+  const confColor = confidence > 70 ? '#48bb78' :
+    confidence > 40 ? '#ed8936' : '#e94560';
 
   const confidenceHTML = confidence > 0 ? `
     <div class="confidence-bar">
@@ -175,7 +364,9 @@ function addTyping() {
   div.innerHTML = `
     <div class="avatar">🤖</div>
     <div class="bubble">
-      <p style="font-size:12px;color:#718096">⏳ Thinking... (may take 30s first time)</p>
+      <p style="font-size:12px;color:#718096">
+        ⏳ Thinking... (may take 30s first time)
+      </p>
       <div class="typing">
         <span></span><span></span><span></span>
       </div>
@@ -195,6 +386,12 @@ function scrollBottom() {
 
 // Send Message
 async function sendMessage() {
+  if (!currentUser) {
+    addBotMessage('Please log in before sending messages.');
+    openAuthModal('login');
+    return;
+  }
+
   const question = chatInput.value.trim();
   if (!question) return;
 
@@ -203,8 +400,10 @@ async function sendMessage() {
   sendBtn.disabled = true;
   addTyping();
 
-  // Save to history
-  chatHistory.unshift({ question, time: new Date().toLocaleTimeString() });
+  chatHistory.unshift({
+    question,
+    time: new Date().toLocaleTimeString()
+  });
   if (chatHistory.length > 10) chatHistory.pop();
   localStorage.setItem('adibotHistory', JSON.stringify(chatHistory));
   updateHistory();
@@ -212,20 +411,25 @@ async function sendMessage() {
   try {
     const response = await fetch(`${API_URL}/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ question }),
       signal: AbortSignal.timeout(60000)
     });
     const data = await response.json();
     removeTyping();
+
     if (response.ok) {
-      addBotMessage(data.answer, data.sources, data.confidence);
+      const answer = data.answer || 'Sorry I could not find an answer!';
+      const sources = data.sources || [];
+      const confidence = data.confidence || 0;
+      addBotMessage(answer, sources, confidence);
     } else {
-      addBotMessage('Sorry, could not get answer. Please try again!');
+      const errorText = data?.error || 'Unable to get response from the server.';
+      addBotMessage(`❌ ${errorText}`);
     }
   } catch (error) {
     removeTyping();
-    addBotMessage('❌ Cannot connect to server. Make sure backend is running!');
+    addBotMessage('❌ Cannot connect to server!');
   }
 
   sendBtn.disabled = false;
@@ -259,6 +463,37 @@ function loadHistory(question) {
   chatInput.focus();
 }
 
+// Export Chat
+function exportChat() {
+  const messages = document.querySelectorAll('.message');
+  let exportText = 'AdiBot Chat Export\n';
+  exportText += 'Aditya College of Engineering & Technology\n';
+  exportText += '==========================================\n';
+  exportText += `Date: ${new Date().toLocaleDateString()}\n`;
+  exportText += `Time: ${new Date().toLocaleTimeString()}\n`;
+  exportText += '==========================================\n\n';
+
+  messages.forEach(msg => {
+    const isBot = msg.classList.contains('bot');
+    const bubble = msg.querySelector('.bubble p');
+    if (bubble) {
+      const role = isBot ? '🤖 AdiBot' : '👤 You';
+      exportText += `${role}:\n${bubble.textContent}\n\n`;
+    }
+  });
+
+  exportText += '==========================================\n';
+  exportText += 'Exported from AdiBot — Aditya College AI Assistant\n';
+
+  const blob = new Blob([exportText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `AdiBot-Chat-${new Date().toLocaleDateString()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Event Listeners
 sendBtn.addEventListener('click', sendMessage);
 chatInput.addEventListener('keypress', (e) => {
@@ -267,69 +502,31 @@ chatInput.addEventListener('keypress', (e) => {
 
 clearBtn.addEventListener('click', () => {
   chatMessages.innerHTML = '';
-  addBotMessage('Chat cleared! Ask me anything about Aditya College 🎓', [], 0);
+  addSuccessMessage('Chat cleared! Ask me anything about Aditya College 🎓');
 });
 
 document.querySelectorAll('.suggestion-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (!currentUser) {
+      openAuthModal('login');
+      addBotMessage('Please log in to use the chatbot.');
+      return;
+    }
     chatInput.value = btn.textContent;
     sendMessage();
   });
 });
 
 // Initialize
-updateHistory();
-// --- User Authentication Management ---
-const authContainer = document.getElementById('auth-container');
-const authModal = document.getElementById('auth-modal');
-const closeModal = document.getElementById('close-modal');
-const authForm = document.getElementById('auth-form');
-const authEmail = document.getElementById('auth-email');
-const toggleAuth = document.getElementById('toggle-auth');
-const modalTitle = document.getElementById('modal-title');
-
-let isSignUpState = false;
-
-function updateAuthUI() {
-  const user = JSON.parse(localStorage.getItem('adibot_user'));
-  if (user && authContainer) {
-    authContainer.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 0.85rem; color: #4ade80; background: rgba(74, 222, 128, 0.1); padding: 4px 10px; border-radius: 20px; border: 1px solid #166534;">👤 ${user.email}</span>
-        <button id="logout-btn" style="background: #e11d48; color: white; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;">Logout</button>
-      </div>
-    `;
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      localStorage.removeItem('adibot_user');
-      updateAuthUI();
-    });
-  } else if (authContainer) {
-    authContainer.innerHTML = `<button id="signin-btn" style="background-color: #2563eb; color: white; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Sign In</button>`;
-    document.getElementById('signin-btn').addEventListener('click', () => authModal.style.display = 'flex');
+try {
+  const savedUser = JSON.parse(localStorage.getItem('adibotUser') || 'null');
+  if (savedUser) {
+    currentUser = savedUser;
   }
+  updateAuthUI();
+  restoreSession();
+} catch (error) {
+  currentUser = null;
+  updateAuthUI();
 }
-
-if (closeModal) {
-  closeModal.addEventListener('click', () => authModal.style.display = 'none');
-}
-
-if (toggleAuth) {
-  toggleAuth.addEventListener('click', () => {
-    isSignUpState = !isSignUpState;
-    modalTitle.innerText = isSignUpState ? 'Create Account' : 'Sign In';
-    toggleAuth.innerText = isSignUpState ? 'Already have an account? Sign In' : 'Need an account? Sign Up';
-  });
-}
-
-if (authForm) {
-  authForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!authEmail.value) return;
-    localStorage.setItem('adibot_user', JSON.stringify({ email: authEmail.value }));
-    authModal.style.display = 'none';
-    updateAuthUI();
-  });
-}
-
-// Initial UI check on page load
-updateAuthUI();
+updateHistory();
