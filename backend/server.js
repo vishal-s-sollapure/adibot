@@ -6,7 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { processDocument, askQuestion, summarizeDocument } = require('./ragEngine');
+const { router: adminRouter, stats: adminStats } = require('./adminRoutes');
+const { processDocument, askQuestion, summarizeDocument, generateFAQs } = require('./ragEngine');
 dotenv.config();
 
 const app = express();
@@ -79,6 +80,22 @@ if (!fs.existsSync('uploads')) {
 // Routes
 app.get('/', (req, res) => {
   res.json({ message: 'AdiBot Backend Running!' });
+});
+
+app.use('/admin', adminRouter);
+
+app.post('/generate-faqs', requireAuth, async (req, res) => {
+  try {
+    const { language = 'English' } = req.body || {};
+    const faqs = await generateFAQs(language);
+    return res.json({ faqs });
+  } catch (error) {
+    console.error('FAQ generation error:', error);
+    if (error?.status === 429 || error?.status >= 500) {
+      return res.status(503).json({ error: 'The AI service is temporarily busy. Please try again.' });
+    }
+    return res.status(500).json({ error: 'Failed to generate FAQs.' });
+  }
 });
 
 app.get('/me', (req, res) => {
@@ -192,6 +209,13 @@ app.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     await processDocument(req.file.path);
+    adminStats.totalUploads++;
+    adminStats.uploadedDocs.unshift({
+      filename: req.file.originalname,
+      uploadTime: new Date().toLocaleTimeString(),
+      uploadDate: new Date().toLocaleDateString(),
+      id: Date.now()
+    });
     res.json({ message: 'PDF uploaded and processed successfully!' });
   } catch (error) {
     console.error(error);
@@ -202,7 +226,8 @@ app.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
 // Summarize route
 app.post('/summarize', requireAuth, async (req, res) => {
   try {
-    const summary = await summarizeDocument();
+    const { language = 'English' } = req.body || {};
+    const summary = await summarizeDocument(language);
     console.log('Summary generated:', summary);
     return res.json({ summary: summary || 'Document processed successfully!' });
   } catch (error) {
@@ -214,16 +239,24 @@ app.post('/summarize', requireAuth, async (req, res) => {
 // Chat route
 app.post('/chat', requireAuth, async (req, res) => {
   try {
-    const { question } = req.body;
+    const { question, language = 'English' } = req.body;
     if (!question) {
       return res.status(400).json({ error: 'Question is required' });
     }
-    const result = await askQuestion(question);
+    const result = await askQuestion(question, language);
+    adminStats.totalQuestions++;
+    adminStats.recentQuestions.unshift({
+      question,
+      time: new Date().toLocaleTimeString(),
+      date: new Date().toLocaleDateString()
+    });
+    if (adminStats.recentQuestions.length > 20) adminStats.recentQuestions.pop();
     console.log('Result:', JSON.stringify(result).substring(0, 100));
+    const answer = typeof result === 'string' ? result : result.answer;
     res.json({
-      answer: result.answer || 'No answer found',
-      sources: result.sources || [],
-      confidence: result.confidence || 0
+      answer: answer || 'No answer found',
+      sources: typeof result === 'string' ? [] : (result.sources || []),
+      confidence: typeof result === 'string' ? 0 : (result.confidence || 0)
     });
   } catch (error) {
     console.error(error);

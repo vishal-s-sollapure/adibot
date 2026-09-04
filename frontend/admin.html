@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="theme-color" content="#1a1a2e" />
+	<title>Admin Dashboard | AdiBot</title>
+	<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+	<div class="app-shell">
+		<section class="login-screen" id="loginScreen">
+			<div class="login-card">
+				<div class="brand-mark">AB</div>
+				<p class="eyebrow">Aditya College of Engineering & Technology</p>
+				<h1>AdiBot Admin</h1>
+				<p class="login-copy">Manage documents, monitor questions, and keep the knowledge assistant healthy.</p>
+				<form id="loginForm" class="login-form">
+					<label for="adminPassword">Admin password</label>
+					<div class="password-field"><input id="adminPassword" type="password" autocomplete="current-password" placeholder="Enter admin password" required /><button type="button" id="togglePassword" class="icon-button">Show</button></div>
+					<button class="primary-button" type="submit"><span>Unlock dashboard</span><span class="button-spinner"></span></button>
+					<p class="form-message" id="loginMessage" role="alert"></p>
+				</form>
+				<a class="back-link" href="index.html">← Return to AdiBot</a>
+			</div>
+		</section>
+
+		<section class="dashboard hidden" id="dashboard">
+			<aside class="sidebar">
+				<div class="sidebar-brand"><span class="brand-mark small">AB</span><div><strong>AdiBot</strong><small>Operations</small></div></div>
+				<nav class="side-nav" aria-label="Admin navigation">
+					<a class="nav-item active" href="#overview" data-section="overview"><span>▦</span> Dashboard</a>
+					<a class="nav-item" href="#documents" data-section="documents"><span>▤</span> Documents</a>
+					<a class="nav-item" href="#questions" data-section="questions"><span>☷</span> Questions</a>
+				</nav>
+				<div class="sidebar-footer"><span><span class="online-dot"></span>System online</span><button id="logoutButton" class="logout-button">Logout</button></div>
+			</aside>
+
+			<main class="main-content">
+				<header class="topbar"><div><p class="eyebrow">Operations center</p><h2>Dashboard overview</h2></div><div class="topbar-meta"><span class="live-pill"><span class="online-dot"></span> Live</span><span id="lastUpdated">Not updated yet</span></div></header>
+				<div class="content-wrap">
+					<section id="overview" class="page-section"><div class="section-heading"><div><h3>At a glance</h3><p>Real-time signals from the AdiBot knowledge system.</p></div><button id="refreshButton" class="secondary-button">↻ Refresh</button></div>
+						<div class="stats-grid">
+							<article class="stat-card questions-stat"><div class="stat-icon">☷</div><div><span>Total questions</span><strong id="totalQuestions">--</strong><small>Questions answered by AdiBot</small></div></article>
+							<article class="stat-card documents-stat"><div class="stat-icon">▤</div><div><span>Documents uploaded</span><strong id="totalUploads">--</strong><small>Knowledge sources processed</small></div></article>
+							<article class="stat-card users-stat"><div class="stat-icon">◉</div><div><span>Registered users</span><strong id="totalUsers">--</strong><small>Active AdiBot accounts</small></div></article>
+							<article class="stat-card status-stat"><div class="stat-icon">✓</div><div><span>System status</span><strong class="status-value">Online</strong><small>API and dashboard connected</small></div></article>
+						</div>
+					</section>
+					<section id="documents" class="page-section panel-section"><div class="section-heading"><div><h3>Document library</h3><p>Uploaded files currently available to the RAG engine.</p></div><span class="section-count" id="documentCount">0 files</span></div><div class="table-wrap"><table><thead><tr><th>Document name</th><th>Upload date</th><th>Upload time</th><th class="actions-column">Actions</th></tr></thead><tbody id="documentsBody"></tbody></table><div class="empty-state hidden" id="documentsEmpty"><span>▤</span><strong>No documents uploaded</strong><p>Uploaded PDFs will appear here.</p></div></div></section>
+					<section id="questions" class="page-section panel-section"><div class="section-heading"><div><h3>Recent questions</h3><p>The last 20 questions submitted to AdiBot.</p></div><span class="section-count" id="questionCount">0 questions</span></div><div class="table-wrap"><table><thead><tr><th>Question</th><th>Date</th><th>Time</th></tr></thead><tbody id="questionsBody"></tbody></table><div class="empty-state hidden" id="questionsEmpty"><span>☷</span><strong>No questions yet</strong><p>Recent user questions will appear here.</p></div></div></section>
+				</div>
+			</main>
+		</section>
+	</div>
+	<div class="toast" id="toast" role="status"></div>
+	<script src="admin.js"></script>
+</body>
+</html>

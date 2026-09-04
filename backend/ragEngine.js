@@ -113,7 +113,7 @@ async function processDocument(filePath) {
 }
 
 // Answer question using RAG
-async function askQuestion(question) {
+async function askQuestion(question, language = 'English') {
   try {
     console.log('Question received:', question);
     console.log('Total chunks:', documentChunks.length);
@@ -126,10 +126,12 @@ async function askQuestion(question) {
     const context = relevantChunks.join('\n\n');
     console.log('Context found:', context.substring(0, 100));
 
+    const responseLanguage = language || 'English';
     const prompt = `You are AdiBot, a helpful assistant for Aditya College of Engineering and Technology in Bengaluru.
 
 Use the following information from college documents to answer the student's question.
 If the answer is not in the provided information, say "I don't have that information in my knowledge base. Please contact the college administration."
+  Answer in ${responseLanguage} language.
 Answer only what the student asked for. Keep the answer concise and do not list unrelated information.
 
 College Document Information:
@@ -198,9 +200,44 @@ Answer:`;
   }
 }
 
-module.exports = { processDocument, askQuestion, summarizeDocument };
+async function generateFAQs(language = 'English') {
+  if (documentChunks.length === 0) {
+    return [];
+  }
+
+  const context = documentChunks.map(chunk => chunk.text).join('\n\n');
+  const responseLanguage = language || 'English';
+  const prompt = `Based on this college document, generate exactly 8 frequently asked questions students would ask. Return only numbered questions. Write the questions in ${responseLanguage} language.
+
+College document:
+${context}`;
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const result = await model.generateContent(prompt);
+  const text = (await result.response).text();
+
+  const questions = [];
+  const numberedQuestions = text.match(/(?:^|\s)\d+[.)]\s+.*?(?=\s+\d+[.)]\s+|$)/g) || [];
+
+  numberedQuestions.forEach(item => {
+    const question = item.replace(/^\s*\d+[.)]\s*/, '').trim();
+    if (question && !questions.includes(question)) questions.push(question);
+  });
+
+  const fallbackQuestions = [
+    'What facilities are available for students on campus?',
+    'How can students contact the college administration?',
+    'What are the important dates for admissions?'
+  ];
+  fallbackQuestions.forEach(question => {
+    if (questions.length < 8 && !questions.includes(question)) questions.push(question);
+  });
+
+  return questions.slice(0, 8);
+}
+
+module.exports = { processDocument, askQuestion, summarizeDocument, generateFAQs };
 // Summarize Document
-async function summarizeDocument() {
+async function summarizeDocument(language = 'English') {
   try {
     if (documentChunks.length === 0) {
       return 'No document uploaded yet!';
@@ -212,6 +249,7 @@ async function summarizeDocument() {
       .map(c => c.text)
       .join('\n\n');
 
+    const responseLanguage = language || 'English';
     const prompt = `You are AdiBot, an AI assistant for Aditya College of Engineering and Technology.
 
 Analyze this college document and provide a clear, structured summary including:
@@ -222,9 +260,9 @@ Analyze this college document and provide a clear, structured summary including:
 Document Content:
 ${sampleText}
 
-Provide a helpful summary in 150 words or less:`;
+Provide a helpful summary in 150 words or less. Answer in ${responseLanguage} language:`;
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     return response.text();
