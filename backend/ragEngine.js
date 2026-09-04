@@ -1,5 +1,9 @@
 const fs = require('fs');
+const path = require('path');
 const { PDFParse } = require('pdf-parse');
+const pdfPoppler = require('pdf-poppler');
+const sharp = require('sharp');
+const { createWorker } = require('tesseract.js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { v4: uuidv4 } = require('uuid');
 const dotenv = require('dotenv');
@@ -86,6 +90,47 @@ function getFallbackAnswer(question, context) {
   return `According to your college document: ${context}`;
 }
 
+function isScannedPDF(text) {
+  return String(text || '').trim().length < 100;
+}
+
+async function extractTextWithOCR(filePath) {
+  const outputDirectory = path.join(path.dirname(filePath), `ocr-${Date.now()}`);
+  fs.mkdirSync(outputDirectory, { recursive: true });
+  const options = { format: 'png', out_dir: outputDirectory, out_prefix: 'page', page: null, scale: 1500 };
+  let worker;
+
+  try {
+    await pdfPoppler.convert(filePath, options);
+    const imageFiles = fs.readdirSync(outputDirectory)
+      .filter(file => file.toLowerCase().endsWith('.png'))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (imageFiles.length === 0) throw new Error('No page images were generated.');
+
+    worker = await createWorker('eng+kan');
+    const pages = [];
+    for (const imageFile of imageFiles) {
+      const imagePath = path.join(outputDirectory, imageFile);
+      const preparedImagePath = path.join(outputDirectory, `prepared-${imageFile}`);
+      await sharp(imagePath).grayscale().png().toFile(preparedImagePath);
+      const result = await worker.recognize(preparedImagePath);
+      pages.push(result.data.text || '');
+      console.log(`OCR processed page ${pages.length} of ${imageFiles.length}`);
+    }
+    return { text: pages.join('\n\n'), pages: imageFiles.length };
+  } catch (error) {
+    if (error.code === 'ENOENT' || /poppler|pdftoppm|not found/i.test(error.message)) {
+      const popplerError = new Error('OCR requires Poppler on Windows. Install Poppler and add its bin folder to PATH, then restart the backend.');
+      popplerError.code = 'POPPLER_UNAVAILABLE';
+      throw popplerError;
+    }
+    throw error;
+  } finally {
+    if (worker) await worker.terminate();
+    fs.rmSync(outputDirectory, { recursive: true, force: true });
+  }
+}
+
 // Process uploaded PDF
 async function processDocument(filePath) {
   try {
@@ -93,7 +138,26 @@ async function processDocument(filePath) {
     const parser = new PDFParse({ data: dataBuffer });
     const pdfData = await parser.getText();
     await parser.destroy();
-    const text = pdfData.text;
+    let text = pdfData.text || '';
+    let method = 'pdf-parse';
+    let pages = pdfData.numpages || 0;
+
+    if (isScannedPDF(text)) {
+      console.log('Scanned PDF detected. OCR Processing...');
+      try {
+        const ocrResult = await extractTextWithOCR(filePath);
+        text = ocrResult.text;
+        pages = ocrResult.pages;
+        method = 'ocr';
+        console.log(`OCR complete: ${pages} pages processed`);
+      } catch (ocrError) {
+        console.error('OCR failed:', ocrError.message);
+        if (text.trim().length === 0) throw ocrError;
+        console.warn('OCR failed; falling back to pdf-parse text.');
+      }
+    } else {
+      console.log('PDF text extracted with pdf-parse');
+    }
 
     const chunks = splitIntoChunks(text);
 
@@ -105,7 +169,7 @@ async function processDocument(filePath) {
     documentChunks = [...documentChunks, ...newChunks];
 
     console.log(`Processed ${newChunks.length} chunks from PDF`);
-    return true;
+    return { method, pages };
   } catch (error) {
     console.error('Error processing document:', error);
     throw error;
@@ -200,6 +264,52 @@ Answer:`;
   }
 }
 
+async function streamAnswer(question, language = 'English', onChunk) {
+  if (documentChunks.length === 0) {
+    const answer = 'Please upload a college document first so I can answer your questions!';
+    onChunk(answer);
+    return { answer, sources: [], confidence: 0 };
+  }
+
+  const relevantChunks = findRelevantChunks(question, documentChunks);
+  const context = relevantChunks.join('\n\n');
+  const responseLanguage = language || 'English';
+  const prompt = `You are AdiBot, a helpful assistant for Aditya College of Engineering and Technology in Bengaluru.
+
+Use the following information from college documents to answer the student's question.
+If the answer is not in the provided information, say "I don't have that information in my knowledge base. Please contact the college administration."
+Answer in ${responseLanguage} language.
+Answer only what the student asked for. Keep the answer concise and do not list unrelated information.
+
+College Document Information:
+${context}
+
+Student Question: ${question}
+
+Answer:`;
+
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const result = await model.generateContentStream(prompt);
+  let answer = '';
+  for await (const item of result.stream) {
+    const text = item.text();
+    if (text) {
+      answer += text;
+      onChunk(text);
+    }
+  }
+
+  return {
+    answer,
+    sources: relevantChunks.map((chunk, index) => ({
+      id: index + 1,
+      text: chunk.substring(0, 100) + '...',
+      score: Math.round((relevantChunks.length - index) / relevantChunks.length * 100)
+    })),
+    confidence: relevantChunks.length > 0 ? Math.round((relevantChunks.length / 3) * 100) : 0
+  };
+}
+
 async function generateFAQs(language = 'English') {
   if (documentChunks.length === 0) {
     return [];
@@ -235,7 +345,15 @@ ${context}`;
   return questions.slice(0, 8);
 }
 
-module.exports = { processDocument, askQuestion, summarizeDocument, generateFAQs };
+module.exports = {
+  processDocument,
+  isScannedPDF,
+  extractTextWithOCR,
+  askQuestion,
+  streamAnswer,
+  summarizeDocument,
+  generateFAQs
+};
 // Summarize Document
 async function summarizeDocument(language = 'English') {
   try {

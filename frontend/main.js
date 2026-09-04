@@ -50,6 +50,7 @@ const fileInfo = document.getElementById('fileInfo');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
+const micBtn = document.getElementById('micBtn');
 const clearBtn = document.getElementById('clearBtn');
 const uploadArea = document.getElementById('uploadArea');
 const languageSelect = document.getElementById('languageSelect');
@@ -70,6 +71,95 @@ const nameField = document.getElementById('nameField');
 const closeAuthModal = document.getElementById('closeAuthModal');
 
 let authMode = 'login';
+let recognition = null;
+let isListening = false;
+let speakingButton = null;
+
+function getLanguageCode(language) {
+  return {
+    English: 'en-US', Hindi: 'hi-IN', Kannada: 'kn-IN', Tamil: 'ta-IN',
+    Telugu: 'te-IN', Malayalam: 'ml-IN', Marathi: 'mr-IN', Bengali: 'bn-IN'
+  }[language] || 'en-US';
+}
+
+function initVoiceInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    micBtn.title = 'Voice input is not supported in this browser';
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.classList.add('listening');
+    micBtn.textContent = '🔴';
+    micBtn.title = 'Listening... click to stop';
+  };
+  recognition.onresult = event => {
+    const transcript = event.results[0][0].transcript.trim();
+    if (transcript) {
+      chatInput.value = transcript;
+      sendMessage();
+    }
+  };
+  recognition.onerror = event => {
+    const message = event.error === 'not-allowed' ? 'Microphone permission was denied.' : 'Could not access the microphone. Please try again.';
+    addBotMessage(message);
+  };
+  recognition.onend = stopListening;
+}
+
+function startListening() {
+  if (!recognition) {
+    addBotMessage('Voice input is not supported in this browser. Please use Chrome.');
+    return;
+  }
+  if (!currentUser) {
+    addBotMessage('Please log in before using voice input.');
+    openAuthModal('login');
+    return;
+  }
+  recognition.lang = getLanguageCode(selectedLanguage);
+  try { recognition.start(); } catch (error) { addBotMessage('Microphone is already listening.'); }
+}
+
+function stopListening() {
+  isListening = false;
+  micBtn.classList.remove('listening');
+  micBtn.textContent = '🎙️';
+  micBtn.title = 'Voice input';
+}
+
+function speakText(text, language = selectedLanguage, button = null) {
+  if (!('speechSynthesis' in window)) {
+    addBotMessage('Voice output is not supported in this browser.');
+    return;
+  }
+  if (speakingButton === button && window.speechSynthesis.speaking) {
+    stopSpeaking();
+    return;
+  }
+  stopSpeaking();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = getLanguageCode(language);
+  speakingButton = button;
+  if (button) { button.classList.add('speaking'); button.textContent = '⏹️'; }
+  utterance.onend = utterance.onerror = () => {
+    if (button) { button.classList.remove('speaking'); button.textContent = '🔊'; }
+    speakingButton = null;
+  };
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeaking() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (speakingButton) { speakingButton.classList.remove('speaking'); speakingButton.textContent = '🔊'; }
+  speakingButton = null;
+}
 
 function saveLanguage() {
   localStorage.setItem('adibotLanguage', selectedLanguage);
@@ -302,6 +392,20 @@ authModal.addEventListener('click', (event) => {
 });
 authForm.addEventListener('submit', submitAuthForm);
 logoutBtn.addEventListener('click', logoutUser);
+micBtn.addEventListener('click', () => {
+  if (isListening && recognition) {
+    recognition.stop();
+  } else {
+    startListening();
+  }
+});
+chatMessages.addEventListener('click', event => {
+  const button = event.target.closest('.message.bot .speaker-btn');
+  if (!button) return;
+  const message = button.closest('.message');
+  const text = message.querySelector('.bubble')?.textContent?.trim();
+  if (text) speakText(text, selectedLanguage, button);
+});
 languageSelect.addEventListener('change', () => {
   selectedLanguage = languageSelect.value;
   saveLanguage();
@@ -388,8 +492,14 @@ uploadBtn.addEventListener('click', async () => {
     const data = await response.json();
 
     if (response.ok) {
-      addSuccessMessage('✅ Document uploaded successfully! Generating summary... ⏳');
-      showStatus('✅ PDF processed successfully!', 'success');
+      const isOCR = data.method === 'ocr';
+      if (isOCR) {
+        addSuccessMessage(`✅ Scanned PDF processed with OCR! ${data.pages || ''} pages processed.`);
+        showStatus('✅ OCR Complete!', 'success');
+      } else {
+        addSuccessMessage('✅ Document processed! Generating summary... ⏳');
+        showStatus('✅ PDF processed successfully!', 'success');
+      }
       try {
         const summaryRes = await fetch(`${API_URL}/summarize`, {
           method: 'POST',
@@ -471,6 +581,11 @@ function addBotMessage(text, sources = [], confidence = 0) {
       <button class="feedback-btn" onclick="handleFeedback(this,'down')">👎</button>
     </div>`;
 
+  const voiceHTML = `
+    <div class="voice-actions">
+      <button class="speaker-btn" type="button" aria-label="Read answer aloud" title="Read aloud">🔊</button>
+    </div>`;
+
   div.innerHTML = `
     <div class="avatar">🤖</div>
     <div class="bubble">
@@ -478,6 +593,7 @@ function addBotMessage(text, sources = [], confidence = 0) {
       ${confidenceHTML}
       ${sourcesHTML}
       ${feedbackHTML}
+      ${voiceHTML}
     </div>`;
 
   chatMessages.appendChild(div);
@@ -523,8 +639,36 @@ function scrollBottom() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Send Message
-async function sendMessage() {
+function createStreamingMessage() {
+  const div = document.createElement('div');
+  div.className = 'message bot streaming-message';
+  div.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble">
+      <p class="stream-answer"><span class="typing-label">AdiBot is typing...</span><span class="streaming-cursor"></span></p>
+    </div>`;
+  chatMessages.appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+function addStreamMetadata(message, sources, confidence) {
+  const bubble = message.querySelector('.bubble');
+  const answer = message.querySelector('.stream-answer');
+  const confColor = confidence > 70 ? '#48bb78' : confidence > 40 ? '#ed8936' : '#e94560';
+  const sourcesHTML = sources && sources.length > 0 ? `
+    <div class="sources-section"><p class="sources-title">📚 Sources Used:</p>
+      ${sources.map(source => `<div class="source-item"><span class="source-id">Source ${source.id}</span><span class="source-text">${escapeHtml(source.text)}</span><span class="source-score" style="color:${confColor}">${source.score}% match</span></div>`).join('')}
+    </div>` : '';
+  answer.insertAdjacentHTML('afterend', `
+    ${confidence > 0 ? `<div class="confidence-bar"><span class="confidence-label">Confidence:</span><div class="confidence-track"><div class="confidence-fill" style="width:${confidence}%;background:${confColor}"></div></div><span class="confidence-value" style="color:${confColor}">${confidence}%</span></div>` : ''}
+    ${sourcesHTML}
+    <div class="feedback-section"><span class="feedback-label">Was this helpful?</span><button class="feedback-btn" onclick="handleFeedback(this,'up')">👍</button><button class="feedback-btn" onclick="handleFeedback(this,'down')">👎</button></div>
+    <div class="voice-actions"><button class="speaker-btn" type="button" aria-label="Read answer aloud" title="Read aloud">🔊</button></div>`);
+  message.classList.remove('streaming-message');
+}
+
+async function streamMessage() {
   if (!currentUser) {
     addBotMessage('Please log in before sending messages.');
     openAuthModal('login');
@@ -537,7 +681,9 @@ async function sendMessage() {
   addUserMessage(question);
   chatInput.value = '';
   sendBtn.disabled = true;
-  addTyping();
+  const streamingMessage = createStreamingMessage();
+  const answerElement = streamingMessage.querySelector('.stream-answer');
+  let answerText = '';
 
   chatHistory.unshift({
     question,
@@ -548,32 +694,56 @@ async function sendMessage() {
   updateHistory();
 
   try {
-    const response = await fetch(`${API_URL}/chat`, {
+    const response = await fetch(`${API_URL}/chat-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ question, language: selectedLanguage }),
       signal: AbortSignal.timeout(60000)
     });
-    const data = await response.json();
-    removeTyping();
-
-    if (response.ok) {
-      const answer = data.answer || 'Sorry I could not find an answer!';
-      const sources = data.sources || [];
-      const confidence = data.confidence || 0;
-      addBotMessage(answer, sources, confidence);
-    } else {
-      const errorText = data?.error || 'Unable to get response from the server.';
-      addBotMessage(`❌ ${errorText}`);
+    if (!response.ok || !response.body) throw new Error('Streaming unavailable');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let metadata = { sources: [], confidence: 0 };
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop();
+      for (const event of events) {
+        if (!event.startsWith('data: ')) continue;
+        const payload = JSON.parse(event.slice(6));
+        if (payload.event === 'chunk') {
+          answerText += payload.chunk;
+          answerElement.innerHTML = `${escapeHtml(answerText)}<span class="streaming-cursor"></span>`;
+          scrollBottom();
+        } else if (payload.event === 'metadata') {
+          metadata = payload;
+        } else if (payload.event === 'error') {
+          throw new Error(payload.error);
+        }
+      }
     }
+    answerElement.textContent = answerText || 'No answer found';
+    addStreamMetadata(streamingMessage, metadata.sources, metadata.confidence);
   } catch (error) {
-    removeTyping();
-    addBotMessage('❌ Cannot connect to server!');
+    streamingMessage.remove();
+    try {
+      const fallback = await fetch(`${API_URL}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ question, language: selectedLanguage }) });
+      const data = await fallback.json();
+      if (fallback.ok) addBotMessage(data.answer || 'No answer found', data.sources || [], data.confidence || 0);
+      else addBotMessage(`❌ ${data.error || 'Cannot connect to server!'}`);
+    } catch (fallbackError) {
+      addBotMessage('❌ Cannot connect to server!');
+    }
   }
 
   sendBtn.disabled = false;
   chatInput.focus();
 }
+
+const sendMessage = streamMessage;
 
 // Feedback
 function handleFeedback(btn, type) {
@@ -657,6 +827,7 @@ document.querySelectorAll('.suggestion-btn').forEach(btn => {
 });
 
 // Initialize
+initVoiceInput();
 loadLanguage();
 try {
   const savedUser = JSON.parse(localStorage.getItem('adibotUser') || 'null');

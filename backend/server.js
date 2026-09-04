@@ -7,7 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { router: adminRouter, stats: adminStats } = require('./adminRoutes');
-const { processDocument, askQuestion, summarizeDocument, generateFAQs } = require('./ragEngine');
+const { processDocument, askQuestion, streamAnswer, summarizeDocument, generateFAQs } = require('./ragEngine');
 dotenv.config();
 
 const app = express();
@@ -208,7 +208,7 @@ app.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    await processDocument(req.file.path);
+    const processingResult = await processDocument(req.file.path);
     adminStats.totalUploads++;
     adminStats.uploadedDocs.unshift({
       filename: req.file.originalname,
@@ -216,10 +216,16 @@ app.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
       uploadDate: new Date().toLocaleDateString(),
       id: Date.now()
     });
-    res.json({ message: 'PDF uploaded and processed successfully!' });
+    res.json({
+      message: processingResult.method === 'ocr'
+        ? `OCR complete! ${processingResult.pages} pages processed.`
+        : 'PDF processed successfully!',
+      method: processingResult.method,
+      pages: processingResult.pages
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to process PDF' });
+    res.status(500).json({ error: error.message || 'Failed to process PDF' });
   }
 });
 
@@ -233,6 +239,40 @@ app.post('/summarize', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Summary route error:', error);
     return res.status(500).json({ error: 'Failed to summarize document' });
+  }
+});
+
+app.post('/chat-stream', requireAuth, async (req, res) => {
+  const { question, language = 'English' } = req.body || {};
+  if (!question) {
+    return res.status(400).json({ error: 'Question is required' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  let clientClosed = false;
+  res.on('close', () => { clientClosed = true; });
+  const sendEvent = (event, payload) => {
+    if (!clientClosed && !res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ event, ...payload })}\n\n`);
+    }
+  };
+
+  try {
+    const result = await streamAnswer(question, language, chunk => sendEvent('chunk', { chunk }));
+    adminStats.totalQuestions++;
+    adminStats.recentQuestions.unshift({ question, time: new Date().toLocaleTimeString(), date: new Date().toLocaleDateString() });
+    if (adminStats.recentQuestions.length > 20) adminStats.recentQuestions.pop();
+    sendEvent('metadata', { sources: result.sources || [], confidence: result.confidence || 0 });
+    sendEvent('done', {});
+    if (!res.writableEnded) res.end();
+  } catch (error) {
+    console.error('Chat stream error:', error);
+    sendEvent('error', { error: error?.message || 'Failed to stream answer.' });
+    if (!res.writableEnded) res.end();
   }
 });
 

@@ -133,6 +133,7 @@
              <div class="bubble">
               <p data-i18n="welcomeLine">Hello! I'm <strong>AdiBot</strong>, your AI assistant for Aditya College of Engineering & Technology!</p>
               <p data-i18n="welcomeInstruction">Please upload a college document first, then ask me anything! 🎓</p>
+              <div class="voice-actions"><button class="speaker-btn" type="button" aria-label="Read welcome message aloud" title="Read aloud">🔊</button></div>
             </div>
           </div>
         </div>
@@ -143,6 +144,7 @@
             id="chatInput"
             placeholder="Ask anything about Aditya College..."
           />
+          <button id="micBtn" class="mic-btn" type="button" aria-label="Start voice input" title="Voice input">🎙️</button>
           <button id="sendBtn"><span data-i18n="send">Send</span> ➤</button>
         </div>
 
@@ -182,7 +184,7 @@
     </div>
   </div>
 
-  <script src="main.js?v=multilingual-ui"></script>
+  <script src="main.js?v=streaming-voice"></script>
   <footer class="site-footer"><span>AdiBot · Aditya College AI Assistant</span><a href="admin.html">Admin</a></footer>
 </body>
 </html>
