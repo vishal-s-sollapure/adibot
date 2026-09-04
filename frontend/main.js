@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://adibot-3w4u.onrender.com';
 const languages = [
   { code: 'english', name: 'English', flag: '🇬🇧' },
   { code: 'hindi', name: 'Hindi', flag: '🇮🇳' },
