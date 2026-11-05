@@ -84,6 +84,12 @@ app.get('/', (req, res) => {
 
 app.use('/admin', adminRouter);
 
+// Serve frontend static files if available
+const frontendPath = path.join(__dirname, '../frontend');
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
+}
+
 app.post('/generate-faqs', requireAuth, async (req, res) => {
   try {
     const { language = 'English' } = req.body || {};

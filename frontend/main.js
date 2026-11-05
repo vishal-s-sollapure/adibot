@@ -1,4 +1,50 @@
-const API_URL = 'https://adibot-3w4u.onrender.com';
+const DEFAULT_REMOTE_API = 'https://adibot-3w4u.onrender.com';
+const LOCAL_API = 'http://localhost:5000';
+
+function getInitialApiBase() {
+  const hostname = window.location.hostname;
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || window.location.protocol === 'file:';
+  if (isLocal) {
+    if (window.location.port === '5000') {
+      return '';
+    }
+    return LOCAL_API;
+  }
+  return DEFAULT_REMOTE_API;
+}
+
+let API_URL = getInitialApiBase();
+let localFailed = (API_URL === DEFAULT_REMOTE_API);
+
+async function apiFetch(endpoint, options = {}) {
+  const shouldTryLocal = !localFailed && (API_URL === LOCAL_API || API_URL === '');
+  const candidateBase = shouldTryLocal ? API_URL : DEFAULT_REMOTE_API;
+  const initialUrl = `${candidateBase}${endpoint}`;
+
+  if (shouldTryLocal) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 3500) : null;
+    const fetchOptions = controller ? { ...options, signal: controller.signal } : { ...options };
+
+    try {
+      const response = await fetch(initialUrl, fetchOptions);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (response.status === 404) {
+        throw new Error('Local server returned 404');
+      }
+      return response;
+    } catch (localError) {
+      if (timeoutId) clearTimeout(timeoutId);
+      console.warn(`Local API (${candidateBase}) unreachable. Retrying with remote API (${DEFAULT_REMOTE_API}).`, localError.message);
+      localFailed = true;
+      API_URL = DEFAULT_REMOTE_API;
+    }
+  }
+
+  const remoteUrl = `${DEFAULT_REMOTE_API}${endpoint}`;
+  return await fetch(remoteUrl, options);
+}
+
 const languages = [
   { code: 'english', name: 'English', flag: '🇬🇧' },
   { code: 'hindi', name: 'Hindi', flag: '🇮🇳' },
@@ -218,7 +264,7 @@ async function generateFAQs() {
   setFaqMessage(`${translations[selectedLanguage].faqSubtitle}...`, 'faq-loading');
 
   try {
-    const response = await fetch(`${API_URL}/generate-faqs`, {
+    const response = await apiFetch('/generate-faqs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ language: selectedLanguage })
@@ -278,9 +324,17 @@ async function restoreSession() {
   }
 
   try {
-    const response = await fetch(`${API_URL}/me`, {
+    const response = await apiFetch('/me', {
       headers: getAuthHeaders()
     });
+
+    if (response.status === 401) {
+      localStorage.removeItem('adibotAuthToken');
+      localStorage.removeItem('adibotUser');
+      currentUser = null;
+      updateAuthUI();
+      return;
+    }
 
     if (!response.ok) {
       throw new Error('session invalid');
@@ -290,10 +344,13 @@ async function restoreSession() {
     currentUser = data.user;
     updateAuthUI();
   } catch (error) {
-    localStorage.removeItem('adibotAuthToken');
-    localStorage.removeItem('adibotUser');
-    currentUser = null;
-    updateAuthUI();
+    try {
+      const cached = JSON.parse(localStorage.getItem('adibotUser') || 'null');
+      if (cached) {
+        currentUser = cached;
+        updateAuthUI();
+      }
+    } catch (_) {}
   }
 }
 
@@ -344,7 +401,7 @@ async function submitAuthForm(event) {
   authMessage.className = 'auth-message';
 
   try {
-    const response = await fetch(`${API_URL}/${authMode}`, {
+    const response = await apiFetch(`/${authMode}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -484,7 +541,7 @@ uploadBtn.addEventListener('click', async () => {
   formData.append('pdf', file);
 
   try {
-    const response = await fetch(`${API_URL}/upload`, {
+    const response = await apiFetch('/upload', {
       method: 'POST',
       body: formData,
       headers: getAuthHeaders()
@@ -501,7 +558,7 @@ uploadBtn.addEventListener('click', async () => {
         showStatus('✅ PDF processed successfully!', 'success');
       }
       try {
-        const summaryRes = await fetch(`${API_URL}/summarize`, {
+        const summaryRes = await apiFetch('/summarize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({ language: selectedLanguage })
@@ -694,7 +751,7 @@ async function streamMessage() {
   updateHistory();
 
   try {
-    const response = await fetch(`${API_URL}/chat-stream`, {
+    const response = await apiFetch('/chat-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ question, language: selectedLanguage }),
@@ -730,7 +787,7 @@ async function streamMessage() {
   } catch (error) {
     streamingMessage.remove();
     try {
-      const fallback = await fetch(`${API_URL}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ question, language: selectedLanguage }) });
+      const fallback = await apiFetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ question, language: selectedLanguage }) });
       const data = await fallback.json();
       if (fallback.ok) addBotMessage(data.answer || 'No answer found', data.sources || [], data.confidence || 0);
       else addBotMessage(`❌ ${data.error || 'Cannot connect to server!'}`);

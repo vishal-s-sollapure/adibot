@@ -15,20 +15,48 @@ function getInitialApiBase() {
 }
 
 let activeApiBase = getInitialApiBase();
+let localFailed = (activeApiBase === DEFAULT_REMOTE_API);
+
+function isNetworkError(error) {
+  if (!error) return false;
+  if (error.name === 'TypeError' || error.name === 'AbortError') return true;
+  const msg = String(error.message || '').toLowerCase();
+  return (
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('load failed') ||
+    msg.includes('connection refused') ||
+    msg.includes('aborted')
+  );
+}
 
 async function adminFetch(endpoint, options = {}) {
-  let url = `${activeApiBase}/admin${endpoint}`;
-  try {
-    return await fetch(url, options);
-  } catch (error) {
-    if (activeApiBase === LOCAL_API) {
-      console.warn(`Local admin API (${LOCAL_API}) unreachable. Retrying with remote API (${DEFAULT_REMOTE_API}).`);
+  const shouldTryLocal = !localFailed && (activeApiBase === LOCAL_API || activeApiBase === '');
+  const candidateBase = shouldTryLocal ? activeApiBase : DEFAULT_REMOTE_API;
+  const initialUrl = `${candidateBase}/admin${endpoint}`;
+
+  if (shouldTryLocal) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 3500) : null;
+    const fetchOptions = controller ? { ...options, signal: controller.signal } : { ...options };
+
+    try {
+      const response = await fetch(initialUrl, fetchOptions);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (response.status === 404) {
+        throw new Error('Local server returned 404 on admin route');
+      }
+      return response;
+    } catch (localError) {
+      if (timeoutId) clearTimeout(timeoutId);
+      console.warn(`Local admin API (${candidateBase}) unreachable. Retrying with remote API (${DEFAULT_REMOTE_API}).`, localError.message);
+      localFailed = true;
       activeApiBase = DEFAULT_REMOTE_API;
-      url = `${activeApiBase}/admin${endpoint}`;
-      return await fetch(url, options);
     }
-    throw error;
   }
+
+  const remoteUrl = `${DEFAULT_REMOTE_API}/admin${endpoint}`;
+  return await fetch(remoteUrl, options);
 }
 
 const elements = {
@@ -80,14 +108,30 @@ async function api(path, options = {}) {
         ...(options.headers || {})
       }
     });
+
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      const serverErr = new Error('Backend server is waking up (Render spin-up). Please retry in a few seconds.');
+      serverErr.status = response.status;
+      throw serverErr;
+    }
+
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.message || data.error || 'Admin request failed.');
+      const message = data.message || data.error || (
+        response.status === 401 ? 'Unauthorized admin request. Please log in again.' :
+        response.status === 403 ? 'Forbidden request.' :
+        `Request failed with status ${response.status}`
+      );
+      const err = new Error(message);
+      err.status = response.status;
+      throw err;
     }
     return data;
   } catch (error) {
-    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-      throw new Error('Unable to connect to AdiBot server. Please check your internet connection.');
+    if (isNetworkError(error)) {
+      const netErr = new Error('Unable to connect to AdiBot server. Please check your internet connection or backend server status.');
+      netErr.isNetwork = true;
+      throw netErr;
     }
     throw error;
   }
@@ -162,7 +206,7 @@ async function loadDashboard() {
     renderRows({ ...stats, uploadedDocs: docs.docs || stats.uploadedDocs });
   } catch (error) {
     showToast(error.message, true);
-    if (error.message.includes('Unauthorized') || error.message.includes('admin request')) {
+    if (error.status === 401 || (error.message && error.message.toLowerCase().includes('unauthorized'))) {
       localStorage.removeItem(ADMIN_TOKEN_KEY);
       showLogin();
     }
@@ -180,7 +224,12 @@ elements.loginForm.addEventListener('submit', async event => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: elements.password.value })
     });
-    const result = await response.json();
+
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      throw new Error('AdiBot server is waking up (Render spin-up). Please wait a few seconds and try again.');
+    }
+
+    const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(result.message || result.error || 'Invalid password.');
     }
@@ -188,7 +237,7 @@ elements.loginForm.addEventListener('submit', async event => {
     elements.password.value = '';
     showDashboard();
   } catch (error) {
-    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+    if (isNetworkError(error)) {
       elements.loginMessage.textContent = 'Unable to connect to AdiBot backend server. Please check your internet connection or backend server status.';
     } else {
       elements.loginMessage.textContent = error.message;
